@@ -6,14 +6,18 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision.transforms import ToTensor
-torch.set_default_dtype(torch.float32)
+import tensorly
+from tensorly.decomposition import parafac
 
+# Setting tensorly backend to work with Pytorch
 
+tensorly.set_backend('pytorch')
+print(tensorly.get_backend())
 ## ---- Global learning parameters ---- ##
-epochs_num = 3
+epochs_num = 1
 train_batch_size = 64
 test_batch_size = 500
-eta = 0.01  # learning rate
+eta = 0.05  # learning rate
 model_act = F.relu # Activation type for the neural net
 
 # Architecture, node numbers per layer
@@ -93,54 +97,87 @@ loss_func = nn.CrossEntropyLoss()
 # SGD optimizer with chosen learning rate
 optimizer = optim.SGD(model.parameters(), lr=eta)
 
-# data-collecting variables, will hold <IMAGES, NUM_OF_NEURONS, EPOCH> tensor at end of training
-layer_1_data, layer_2_data, layer_3_data, output_layer_overall_data = tensor([]),tensor([]), tensor([]), tensor([])
+
 
 
 ## -- Train loop -- ##
 
 # Loss tracking
-running_loss = 0.0
+def train():
 
-for epoch in range(1):
-    # Initializing data-collecting members of the model to empty tensors every epoch
-    model.hidden_layer_1_data = tensor([])
-    model.hidden_layer_2_data = tensor([])
-    model.hidden_layer_3_data = tensor([])
-    model.output_layer_data = tensor([])
+    # data-collecting variables, will hold <IMAGES, NUM_OF_NEURONS, EPOCH> tensor at end of training
+    layer_1_data, layer_2_data, layer_3_data, output_layer_overall_data = tensor([]), tensor([]), tensor([]), tensor([])
 
+    # Loss calc helper-var
+    running_loss = 0.0
 
-    for step, (train_x, train_y) in enumerate(train_loader):
-
-        # forward pass #
-        y_pred = model(train_x)
-
-        # Backpropagation #
-        # No need to keep old gradients from backward() calls
-        optimizer.zero_grad()
-
-        # Calculate loss
-        loss = loss_func(y_pred, train_y)
-
-        # Calculate gradients
-        loss.backward()
-
-        # SGD step
-        optimizer.step()
-
-        # Loss logging
-        running_loss += loss.item()
-        if step % 150 == 0:
-            # Average loss of 150 SGD steps
-            print("Average loss for last 150 steps : ", running_loss/150)
-            running_loss = 0.0
+    for epoch in range(epochs_num):
+        # Initializing data-collecting members of the model to empty tensors every epoch
+        model.hidden_layer_1_data = tensor([])
+        model.hidden_layer_2_data = tensor([])
+        model.hidden_layer_3_data = tensor([])
+        model.output_layer_data = tensor([])
 
 
-    # -- End of Epoch -- #
+        for step, (train_x, train_y) in enumerate(train_loader):
 
-    # Updating global data-collectors
-    layer_1_data = torch.cat((torch.unsqueeze(model.hidden_layer_1_data, dim=2), layer_1_data), dim=2)
-    layer_2_data = torch.cat((torch.unsqueeze(model.hidden_layer_2_data, dim=2), layer_2_data), dim=2)
-    layer_3_data = torch.cat((torch.unsqueeze(model.hidden_layer_3_data, dim=2), layer_3_data), dim=2)
-    output_layer_overall_data = torch.cat((torch.unsqueeze(model.output_layer_data, dim=2), output_layer_overall_data), dim=2)
+            # forward pass #
+            y_pred = model(train_x)
+
+            # Backpropagation #
+            # No need to keep old gradients from backward() calls
+            optimizer.zero_grad()
+
+            # Calculate loss
+            loss = loss_func(y_pred, train_y)
+
+            # Calculate gradients
+            loss.backward()
+
+            # SGD step
+            optimizer.step()
+
+            # Loss logging
+            running_loss += loss.item()
+            if step % 150 == 0:
+                # Average loss of 150 SGD steps
+                print("Average loss for last 150 steps : ", running_loss/150)
+                running_loss = 0.0
+
+
+        # -- End of Epoch -- #
+
+        # Updating global data-collectors
+        layer_1_data = torch.cat((torch.unsqueeze(model.hidden_layer_1_data, dim=2), layer_1_data), dim=2)
+        layer_2_data = torch.cat((torch.unsqueeze(model.hidden_layer_2_data, dim=2), layer_2_data), dim=2)
+        layer_3_data = torch.cat((torch.unsqueeze(model.hidden_layer_3_data, dim=2), layer_3_data), dim=2)
+        output_layer_overall_data = torch.cat((torch.unsqueeze(model.output_layer_data, dim=2), output_layer_overall_data), dim=2)
+    return layer_1_data, layer_2_data, layer_3_data, output_layer_overall_data
+
+
+# -- Statistical Pipelines -- #
+
+def statistical_pipeline(layer_tensor):
+
+    # Swap axes to have (T, N, n) tensor
+    base_tensor = torch.transpose(layer_tensor, 0,2)
+
+    # Transposed tensor calc
+    transposed_tensor = torch.transpose(base_tensor, 1,2)
+
+    # Layer correlations tensor
+    layer_corr_tensor = torch.bmm(base_tensor, transposed_tensor)
+
+    # Deciding the best rank
+    factors = parafac(layer_corr_tensor, rank=3)
+    print(factors[0])
+
+
+
+# Running the procedure
+if __name__ == '__main__':
+    layers_data = train()  # Holds layer 1-3, output data from the train phase
+    for data in layers_data:
+      statistical_pipeline(data)
+
 
