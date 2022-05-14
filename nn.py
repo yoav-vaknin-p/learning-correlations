@@ -9,11 +9,13 @@ from torchvision.transforms import ToTensor
 import tensorly
 from tensorly.decomposition import parafac
 
-# Setting tensorly backend to work with Pytorch
+# Config
 
+# Setting tensorly backend to work with Pytorch
 tensorly.set_backend('pytorch')
-print(tensorly.get_backend())
+
 ## ---- Global learning parameters ---- ##
+
 epochs_num = 1
 train_batch_size = 64
 test_batch_size = 500
@@ -24,6 +26,7 @@ model_act = F.relu # Activation type for the neural net
 input_nodes_num = 28 * 28
 hidden_nodes_num = 256
 out_nodes_num = 10
+
 
 ##--  MNIST loading --##
 train_data = datasets.MNIST(
@@ -88,27 +91,18 @@ class NeuralNetwork(nn.Module):
         self.output_layer_data = torch.cat((self.output_layer_data, output), dim=0)
         return output
 
-# Initiating a model
-model = NeuralNetwork()
-
-
-# Loss function
-loss_func = nn.CrossEntropyLoss()
-# SGD optimizer with chosen learning rate
-optimizer = optim.SGD(model.parameters(), lr=eta)
 
 
 
 
 ## -- Train loop -- ##
 
-# Loss tracking
-def train():
+def train(model, loss_func, optimizer):
 
     # data-collecting variables, will hold <IMAGES, NUM_OF_NEURONS, EPOCH> tensor at end of training
     layer_1_data, layer_2_data, layer_3_data, output_layer_overall_data = tensor([]), tensor([]), tensor([]), tensor([])
 
-    # Loss calc helper-var
+    # Loss tracking variable
     running_loss = 0.0
 
     for epoch in range(epochs_num):
@@ -152,6 +146,8 @@ def train():
         layer_2_data = torch.cat((torch.unsqueeze(model.hidden_layer_2_data, dim=2), layer_2_data), dim=2)
         layer_3_data = torch.cat((torch.unsqueeze(model.hidden_layer_3_data, dim=2), layer_3_data), dim=2)
         output_layer_overall_data = torch.cat((torch.unsqueeze(model.output_layer_data, dim=2), output_layer_overall_data), dim=2)
+
+    # Returning layers 1-3 + output collected train data
     return layer_1_data, layer_2_data, layer_3_data, output_layer_overall_data
 
 
@@ -160,24 +156,38 @@ def train():
 def statistical_pipeline(layer_tensor):
 
     # Swap axes to have (T, N, n) tensor
-    base_tensor = torch.transpose(layer_tensor, 0,2)
+    base_tensor = tensorly.transpose(layer_tensor, (2,1,0))
 
     # Transposed tensor calc
-    transposed_tensor = torch.transpose(base_tensor, 1,2)
+    transposed_tensor = tensorly.transpose(base_tensor, (0,2,1))
 
     # Layer correlations tensor
-    layer_corr_tensor = torch.bmm(base_tensor, transposed_tensor)
+    layer_corr_tensor = tensorly.matmul(base_tensor, transposed_tensor)
 
-    # Deciding the best rank
-    factors = parafac(layer_corr_tensor, rank=3)
-    print(factors[0])
-
+    # Choosing best low-rank for CANDECOMP / Parafac / Canonical Polyadic Decomposition
+    for rank in (1,2,3):
+        parafac_decomposition = parafac(layer_corr_tensor, rank=rank, svd='truncated_svd', normalize_factors=True, return_errors=True)
+        # TODO -- Understand "each iteration error" from their documentation.. is it the alternating squares error?
 
 
 # Running the procedure
 if __name__ == '__main__':
-    layers_data = train()  # Holds layer 1-3, output data from the train phase
-    for data in layers_data:
-      statistical_pipeline(data)
+    # Initiation
+
+    # Initiating our custom model
+    model = NeuralNetwork()
+
+    # Defining the loss function
+    loss_func = nn.CrossEntropyLoss()
+
+    # SGD optimizer with chosen learning rate
+    optimizer = optim.SGD(model.parameters(), lr=eta)
+
+    layers_data = train(model, loss_func, optimizer)  # Holds layer 1-3, output data from the train phase
+
+    # TODO -- Currently working with output layer only to figure out the statistical operation faster
+    # for data in layers_data:
+    statistical_pipeline(layers_data[3])
+
 
 
