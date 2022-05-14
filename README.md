@@ -14,4 +14,3 @@ We will calculate a confusion matrix per-layer, and find the differences between
 <b> Information regarding the Neural Network </b><br>
 TODO
 
-<small>Project by Yoav Vaknin</small>
