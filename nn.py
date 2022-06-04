@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import tensor
 import torch
-\from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision.transforms import ToTensor
 import tensorly
@@ -18,7 +18,7 @@ tensorly.set_backend('pytorch')
 
 ## ---- Global learning parameters ---- ##
 
-epochs_num = 2
+epochs_num = 1
 mini_epoch_size = 50  # Measured in SGD steps
 batch_size = 50
 eta = 0.1  # Initial learning rate
@@ -68,7 +68,7 @@ class NeuralNetwork(nn.Module):
         self.output_layer_data = tensor([])
 
     def forward(self, x):
-        # We don't keep track of more than one forward call (Large memory cost & no need)
+        # We don't keep track of more than one forward call (Large memory cost & no need) so reset each forward() call
         model.hidden_layer_1_data = tensor([])
         model.hidden_layer_2_data = tensor([])
         model.hidden_layer_3_data = tensor([])
