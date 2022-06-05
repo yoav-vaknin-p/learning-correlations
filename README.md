@@ -1,4 +1,4 @@
-# Inter-Layer Correlations in a Learning Neural Network
+# Inner-Layer Correlations in a Learning Neural Network
 
 Installed packages appear on PackagesUsed file. important ones are torch and torchvision.
 
